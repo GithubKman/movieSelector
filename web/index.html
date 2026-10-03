@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>movieSelector</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">movie<span>Selector</span></a>
+    <nav>
+      <button data-view="browse" class="active">Browse</button>
+      <button data-view="queue">Queue</button>
+    </nav>
+    <div class="spacer"></div>
+    <nav><a href="/manage">Manage</a></nav>
+  </header>
+
+  <main>
+    <section id="browse">
+      <form class="searchbar" id="search-form">
+        <input type="search" id="q" placeholder="Search movies and shows…" autocomplete="off" autofocus>
+        <div class="seg" id="type">
+          <button type="button" data-type="" class="on">All</button>
+          <button type="button" data-type="movie">Movies</button>
+          <button type="button" data-type="tv">Shows</button>
+        </div>
+      </form>
+      <div id="demo-banner" class="banner hidden">
+        Demo catalog — set <code>TMDB_API_KEY</code> to search every movie and show.
+      </div>
+      <h2 class="section-title" id="results-title">Trending</h2>
+      <div class="grid" id="results"></div>
+      <div class="empty hidden" id="no-results">No results.</div>
+      <button class="btn more hidden" id="more">Load more</button>
+    </section>
+
+    <section id="queue" class="hidden">
+      <div class="toolbar" id="queue-filters"></div>
+      <div class="list" id="queue-list"></div>
+      <div class="empty hidden" id="queue-empty">Nothing here yet.</div>
+    </section>
+  </main>
+
+  <div class="tray hidden" id="tray">
+    <div class="thumbs" id="tray-thumbs"></div>
+    <span class="count" id="tray-count"></span>
+    <input id="requester" placeholder="Your name" maxlength="64">
+    <button class="btn" id="tray-clear">Clear</button>
+    <button class="btn primary" id="tray-submit">Request</button>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

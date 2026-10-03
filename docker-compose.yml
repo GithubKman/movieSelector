@@ -1,0 +1,22 @@
+# Example for TrueNAS SCALE (Apps > Custom App > install via YAML) or plain docker compose.
+services:
+  movieselector:
+    build: .
+    image: movieselector:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data # on TrueNAS, point this at a dataset, e.g. /mnt/tank/apps/movieselector
+    environment:
+      ADMIN_TOKEN: change-me
+      BASE_URL: http://nas.local:8080
+      TMDB_API_KEY: ""
+      TZ: UTC
+      NOTIFY_AT: "09:00"
+      NOTIFY_EMAIL: you@example.com
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USERNAME: you@gmail.com
+      SMTP_PASSWORD: app-password
+      SMTP_FROM: movieSelector <you@gmail.com>
