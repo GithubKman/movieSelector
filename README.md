@@ -65,13 +65,14 @@ All configuration is environment variables (`make dev` loads `.env`):
 | `TZ` | UTC | e.g. `America/New_York` |
 | `SMTP_HOST` / `SMTP_PORT` | none / `587` | |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | none | For Gmail, use an [app password](https://myaccount.google.com/apppasswords) |
-| `SMTP_FROM` | `movieselector@localhost` | |
+| `SMTP_FROM` | `movieselector@localhost` | Sender address (also used for SendGrid) |
 | `SMTP_TLS` | auto | `tls` (port 465), `starttls`, `none`, or auto |
+| `SENDGRID_API_KEY` | none | Send through the [SendGrid](https://sendgrid.com/) API instead of SMTP. Needs "Mail Send" permission; `SMTP_FROM` must be a verified sender |
 
 **Daily digest.** Once a day at `NOTIFY_AT`, every request not yet included in a digest is
 emailed in one message; nothing is sent on days without new requests. The last send date is
 stored in the database, so restarts don't send twice, and a digest missed while the server was
-down goes out when it starts again. Without SMTP configured the digest is printed to the log.
+down goes out when it starts again. Without SMTP or SendGrid configured the digest is printed to the log.
 
 **Security.** Anyone who can reach the site can search, request and view the queue; changes need
 the admin token. Run it on your LAN or behind a VPN or reverse proxy. Don't expose it to the internet as it is.

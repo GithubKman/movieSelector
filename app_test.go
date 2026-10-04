@@ -308,3 +308,48 @@ func TestStaticPages(t *testing.T) {
 		}
 	}
 }
+
+func TestDigestSendGrid(t *testing.T) {
+	e := newTestEnv(t)
+	var got struct {
+		auth string
+		body map[string]any
+	}
+	status := http.StatusAccepted
+	sg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.auth = r.Header.Get("Authorization")
+		json.NewDecoder(r.Body).Decode(&got.body)
+		w.WriteHeader(status)
+		if status != http.StatusAccepted {
+			w.Write([]byte(`{"errors":[{"message":"The from address does not match a verified Sender Identity."}]}`))
+		}
+	}))
+	defer sg.Close()
+	e.notify.SMTP = SMTPConfig{From: "movieSelector <ms@example.com>"}
+	e.notify.SendGridKey = "SG.test"
+	e.notify.sendGridURL = sg.URL
+
+	e.request("sam", matrix)
+	status = http.StatusForbidden
+	if _, err := e.notify.SendDigest(context.Background()); err == nil || !strings.Contains(err.Error(), "verified Sender") {
+		t.Fatalf("want sendgrid error, got %v", err)
+	}
+
+	status = http.StatusAccepted
+	if n, err := e.notify.SendDigest(context.Background()); err != nil || n != 1 {
+		t.Fatalf("send: n=%d err=%v", n, err)
+	}
+	if got.auth != "Bearer SG.test" {
+		t.Errorf("auth header %q", got.auth)
+	}
+	b, _ := json.Marshal(got.body)
+	for _, want := range []string{`"subject":"[movieSelector] 1 new title requested"`, `"email":"me@example.com"`,
+		`"from":{"email":"ms@example.com","name":"movieSelector"}`, `"type":"text/html"`, "The Matrix (1999)"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("payload missing %s: %s", want, b)
+		}
+	}
+	if len(e.sent) != 0 {
+		t.Errorf("SMTP used alongside SendGrid")
+	}
+}

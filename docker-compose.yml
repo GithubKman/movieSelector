@@ -20,3 +20,5 @@ services:
       SMTP_USERNAME: you@gmail.com
       SMTP_PASSWORD: app-password
       SMTP_FROM: movieSelector <you@gmail.com>
+      # Or use SendGrid instead of SMTP (SMTP_FROM must be a verified sender):
+      # SENDGRID_API_KEY: SG.xxxx

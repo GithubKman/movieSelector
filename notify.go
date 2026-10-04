@@ -6,11 +6,14 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"mime/quotedprintable"
 	"net"
+	"net/http"
 	"net/mail"
 	"net/smtp"
 	"strconv"
@@ -33,17 +36,23 @@ type SMTPConfig struct {
 
 // Notifier sends the daily digest of newly requested titles.
 type Notifier struct {
-	Store   *Store
-	SMTP    SMTPConfig
-	To      []string
-	BaseURL string
+	Store *Store
+	SMTP  SMTPConfig
+	// SendGridKey, when set, sends through the SendGrid Web API instead of
+	// SMTP. SMTP.From is still the sender and must be verified in SendGrid.
+	SendGridKey string
+	To          []string
+	BaseURL     string
 
 	mu sync.Mutex // one digest at a time
-	// send is swappable for tests.
-	send func(cfg SMTPConfig, to []string, msg []byte) error
+	// send and sendGridURL are swappable for tests.
+	send        func(cfg SMTPConfig, to []string, msg []byte) error
+	sendGridURL string
 }
 
-func (n *Notifier) Enabled() bool { return n.SMTP.Host != "" && len(n.To) > 0 }
+func (n *Notifier) Enabled() bool {
+	return (n.SendGridKey != "" || n.SMTP.Host != "") && len(n.To) > 0
+}
 
 type Digest struct {
 	Subject  string
@@ -127,11 +136,16 @@ func (n *Notifier) SendDigest(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	if n.Enabled() {
-		send := n.send
-		if send == nil {
-			send = sendMail
+		if n.SendGridKey != "" {
+			err = n.sendGrid(ctx, d)
+		} else {
+			send := n.send
+			if send == nil {
+				send = sendMail
+			}
+			err = send(n.SMTP, n.To, buildMessage(n.SMTP.From, n.To, d))
 		}
-		if err := send(n.SMTP, n.To, buildMessage(n.SMTP.From, n.To, d)); err != nil {
+		if err != nil {
 			return 0, fmt.Errorf("send digest: %w", err)
 		}
 		log.Printf("digest: emailed %d request(s) to %s", len(d.Requests), strings.Join(n.To, ", "))
@@ -280,4 +294,57 @@ func sendMail(cfg SMTPConfig, to []string, msg []byte) error {
 		return err
 	}
 	return c.Quit()
+}
+
+const sendGridEndpoint = "https://api.sendgrid.com/v3/mail/send"
+
+type sendGridAddr struct {
+	Email string `json:"email"`
+	Name  string `json:"name,omitempty"`
+}
+
+// sendGrid sends the digest through the SendGrid v3 mail/send API.
+func (n *Notifier) sendGrid(ctx context.Context, d *Digest) error {
+	from := sendGridAddr{Email: n.SMTP.From}
+	if a, err := mail.ParseAddress(n.SMTP.From); err == nil {
+		from = sendGridAddr{Email: a.Address, Name: a.Name}
+	}
+	to := make([]sendGridAddr, len(n.To))
+	for i, addr := range n.To {
+		to[i] = sendGridAddr{Email: addr}
+	}
+	body, err := json.Marshal(map[string]any{
+		"personalizations": []any{map[string]any{"to": to}},
+		"from":             from,
+		"subject":          d.Subject,
+		"content": []map[string]string{
+			{"type": "text/plain", "value": d.Text},
+			{"type": "text/html", "value": d.HTML},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	url := n.sendGridURL
+	if url == "" {
+		url = sendGridEndpoint
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+n.SendGridKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("sendgrid: %s: %s", resp.Status, bytes.TrimSpace(msg))
+	}
+	return nil
 }

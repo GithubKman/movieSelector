@@ -27,9 +27,10 @@ type Config struct {
 	TMDBKey    string
 	BaseURL    string // public URL used for links in emails
 
-	SMTP     SMTPConfig
-	NotifyTo []string
-	NotifyAt string // "HH:MM" local time; empty disables the daily digest
+	SMTP        SMTPConfig
+	SendGridKey string // when set, used instead of SMTP
+	NotifyTo    []string
+	NotifyAt    string // "HH:MM" local time; empty disables the daily digest
 }
 
 func env(key, def string) string {
@@ -55,7 +56,8 @@ func loadConfig() Config {
 			From:     env("SMTP_FROM", "movieselector@localhost"),
 			TLS:      env("SMTP_TLS", ""),
 		},
-		NotifyAt: env("NOTIFY_AT", "09:00"),
+		SendGridKey: env("SENDGRID_API_KEY", ""),
+		NotifyAt:    env("NOTIFY_AT", "09:00"),
 	}
 	for _, addr := range strings.Split(env("NOTIFY_EMAIL", ""), ",") {
 		if addr = strings.TrimSpace(addr); addr != "" {
@@ -95,9 +97,11 @@ func main() {
 		log.Printf("search provider: built-in demo catalog (set TMDB_API_KEY for real search)")
 	}
 
-	notifier := &Notifier{Store: store, SMTP: cfg.SMTP, To: cfg.NotifyTo, BaseURL: cfg.BaseURL}
+	notifier := &Notifier{Store: store, SMTP: cfg.SMTP, SendGridKey: cfg.SendGridKey, To: cfg.NotifyTo, BaseURL: cfg.BaseURL}
 	if !notifier.Enabled() {
-		log.Printf("email not configured (SMTP_HOST / NOTIFY_EMAIL); digests will be logged instead")
+		log.Printf("email not configured (SENDGRID_API_KEY or SMTP_HOST, plus NOTIFY_EMAIL); digests will be logged instead")
+	} else if cfg.SendGridKey != "" {
+		log.Printf("email: sending digests through SendGrid")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
